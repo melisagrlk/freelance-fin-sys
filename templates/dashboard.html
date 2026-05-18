@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard - FreeLanceOS</title>
+</head>
+<body>
+    <h1>Welcome, {{ session['username'] }}!</h1>
+    <a href="/logout">Logout</a>
+    <hr>
+    
+    <h2>Financial Overview</h2>
+    <p><strong>Total Earnings (Paid):</strong> ${{ total_revenue }}</p>
+    <p><strong>Pending Invoices:</strong> ${{ pending_payments }}</p>
+    <hr>
+    
+    <h3>My Projects</h3>
+    <a href="/add_project">Add New Project</a>
+    <br><br>
+
+    <table border="1" cellpadding="5">
+        <thead>
+            <tr>
+                <th>Client Name</th>
+                <th>Project Title</th>
+                <th>Budget ($)</th>
+                <th>Deadline</th> <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for project in projects %}
+            <tr>
+                <td>{{ project['client_name'] }}</td>
+                <td>{{ project['project_title'] }}</td>
+                <td>${{ project['budget'] }}</td>
+                <td>{{ project['deadline'] }}</td> <td>{{ project['status'] }}</td>
+                <td>
+                    <a href="/toggle_status/{{ project['id'] }}">Change Status</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6">No projects added yet.</td> </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

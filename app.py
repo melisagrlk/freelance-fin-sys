@@ -53,10 +53,26 @@ def dashboard():
         return redirect(url_for('login'))
 
     user_id = session['user_id']
+    # URL'den gelen arama kelimesini çekiyoruz ve sağındaki/solundaki boşlukları temizliyoruz
+    search_query = request.args.get('search', '').strip()
+    
     db = get_db_connection()
     
-    # Sadece kullanıcının projelerini çekiyoruz
-    projects = db.execute("SELECT * FROM projects WHERE user_id = ?", (user_id,)).fetchall()
+    # Arama çubuğunda gerçekten bir metin var mı kontrolü
+    if search_query:
+        # SQLite için LIKE arama formatını hazırlıyoruz (%kelime%)
+        formatted_search = f"%{search_query}%"
+        
+        query = """
+            SELECT * FROM projects 
+            WHERE user_id = ? AND (client_name LIKE ? OR project_title LIKE ?)
+        """
+        # Sorguyu çalıştırıp sadece filtrelenmiş projeleri alıyoruz
+        projects = db.execute(query, (user_id, formatted_search, formatted_search)).fetchall()
+    else:
+        # Arama çubuğu boşsa kullanıcının tüm projelerini listeliyoruz
+        projects = db.execute("SELECT * FROM projects WHERE user_id = ?", (user_id,)).fetchall()
+        
     db.close()
     
     # İş Mantığı (Business Logic): Değerleri Python ile dinamik hesaplıyoruz

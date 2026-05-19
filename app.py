@@ -111,5 +111,98 @@ def app_project():
 
     return render_template('add_project.html')
 
+@app.route('/delete_project/<int:project_id>')
+def delete_project(project_id):
+    #güvenlik kontrolü, eğer giriş yapılmadıysa login sayfasına yönlendirir.
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    db = get_db_connection()
+
+    # Güvenlik önlemi: Sadece giriş yapan kullanıcıya ait olan projeyi sil (SQL injection ve yetki aşımı koruması)
+    db.execute("DELETE FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id))
+    db.commit()
+    db.close()
+    
+    # Silme işleminden sonra güncel listeyi görmesi için dashboard'a geri yönlendiriyoruz
+    return redirect(url_for('dashboard'))
+
+@app.route('/edit_project/<int:project_id>', methods=['GET', 'POST'])
+def edit_project(project_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    db = get_db_connection()
+
+    # Önce düzenlenmek istenen projeyi çekiyoruz (ve kullanıcının kendi projesi mi diye bakıyoruz)
+    project = db.execute("SELECT * FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id)).fetchone()
+
+    if not project:
+        db.close()
+        return "Project not found or unauthorized!",404
+
+    if request.method == 'POST':
+        client_name = request.form.get('client_name')
+        project_title = request.form.get('project_title')
+        budget_raw = request.form.get('budget')
+        deadline = request.form.get('deadline')
+
+        # İş Mantığı Kriteri: Eksik alan kontrolü
+        if not client_name or not project_title or not budget_raw or not deadline:
+            flash("Warning: All fields are mandatory!")
+            return redirect(url_for('edit_project', project_id=project_id))
+
+        try:
+            budget = float(budget_raw)
+            if budget <= 0:
+                flash("Warning: Budget must be a positive number!")
+                return redirect(url_for('edit_project', project_id=project_id))
+        except ValueError:
+            flash("Warning: Invalid budget format!")
+            return redirect(url_for('edit_project', project_id=project_id))
+
+        # Ham SQL ile veritabanını güncelliyoruz (CRUD - Update)
+        db.execute("""
+            UPDATE projects 
+            SET client_name = ?, project_title = ?, budget = ?, deadline = ? 
+            WHERE id = ? AND user_id = ?
+        """, (client_name, project_title, budget, deadline, project_id, user_id))
+        
+        db.commit()
+        db.close()
+        return redirect(url_for('dashboard'))
+
+    db.close()
+    return render_template('edit_project.html', project=project)
+
+
+@app.route('/toggle_status/<int:project_id>')
+def toggle_status(project_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    db = get_db_connection()
+    
+    # Güvenlik Kontrolü: Projenin gerçekten bu kullanıcıya ait olduğundan emin oluyoruz
+    project = db.execute("SELECT status FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id)).fetchone()
+    
+    if project:
+        # Durum Pending ise Paid, Paid ise Pending yapıyoruz
+        new_status = 'Paid' if project['status'] == 'Pending' else 'Pending'
+        
+        # Ham SQL ile durumu güncelliyoruz
+        db.execute("UPDATE projects SET status = ? WHERE id = ? AND user_id = ?", (new_status, project_id, user_id))
+        
+        # Değişiklikleri veritabanına mühürlüyoruz
+        db.commit()
+        
+    db.close()
+    
+    # Güncel durumu görmesi için dashboard'a geri yönlendiriyoruz
+    return redirect(url_for('dashboard'))
+
 if __name__=="__main__":
     app.run(debug=True)

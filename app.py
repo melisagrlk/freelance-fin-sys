@@ -10,6 +10,28 @@ def get_db_connection():
     conn.row_factory= sqlite3.Row #verilere isimleri ile erişmeyi sağlar
     return conn
 
+def calculate_financials(projects):
+    """
+    Business Logic: Calculates gross revenue, total earnings, and outstanding receivables.
+    This independent function is designed to be fully testable via Unit Tests.
+    """
+    total_revenue = 0
+    pending_payments = 0
+    gross_revenue = 0
+    
+    for project in projects:
+        # SQLite Row nesnesini veya normal sözlüğü (dict) desteklemesi için get yapısını kullanıyoruz
+        budget = project.get('budget', 0)
+        status = project.get('status', 'Pending')
+        
+        gross_revenue += budget
+        if status == 'Paid':
+            total_revenue += budget
+        elif status == 'Pending':
+            pending_payments += budget
+            
+    return gross_revenue, total_revenue, pending_payments
+
 @app.route('/register',methods=['GET', 'POST'])
 def register():
     if request.method=="POST":
@@ -53,41 +75,21 @@ def dashboard():
         return redirect(url_for('login'))
 
     user_id = session['user_id']
-    # URL'den gelen arama kelimesini çekiyoruz ve sağındaki/solundaki boşlukları temizliyoruz
     search_query = request.args.get('search', '').strip()
-    
     db = get_db_connection()
     
-    # Arama çubuğunda gerçekten bir metin var mı kontrolü
     if search_query:
-        # SQLite için LIKE arama formatını hazırlıyoruz (%kelime%)
         formatted_search = f"%{search_query}%"
-        
-        query = """
-            SELECT * FROM projects 
-            WHERE user_id = ? AND (client_name LIKE ? OR project_title LIKE ?)
-        """
-        # Sorguyu çalıştırıp sadece filtrelenmiş projeleri alıyoruz
+        query = "SELECT * FROM projects WHERE user_id = ? AND (client_name LIKE ? OR project_title LIKE ?)"
         projects = db.execute(query, (user_id, formatted_search, formatted_search)).fetchall()
     else:
-        # Arama çubuğu boşsa kullanıcının tüm projelerini listeliyoruz
         projects = db.execute("SELECT * FROM projects WHERE user_id = ?", (user_id,)).fetchall()
         
     db.close()
     
-    # İş Mantığı (Business Logic): Değerleri Python ile dinamik hesaplıyoruz
-    total_revenue = 0
-    pending_payments = 0
-    gross_revenue = 0
+    # İŞ MANTIĞI: Bağımsız fonksiyonumuzu çağırarak hesaplamayı yapıyoruz
+    gross_revenue, total_revenue, pending_payments = calculate_financials(projects)
     
-    for project in projects:
-        gross_revenue += project['budget'] #durumu fark etmeksizin tüm proje gelirlerini topluyor
-        if project['status'] == 'Paid':
-            total_revenue += project['budget']
-        elif project['status'] == 'Pending':
-            pending_payments += project['budget']
-    
-    # Verileri şablona gönderiyoruz
     return render_template('dashboard.html', projects=projects, total_revenue=total_revenue, pending_payments=pending_payments, gross_revenue=gross_revenue)
 
 @app.route('/logout')

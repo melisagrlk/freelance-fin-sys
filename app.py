@@ -62,15 +62,17 @@ def dashboard():
     # İş Mantığı (Business Logic): Değerleri Python ile dinamik hesaplıyoruz
     total_revenue = 0
     pending_payments = 0
+    gross_revenue = 0
     
     for project in projects:
+        gross_revenue += project['budget'] #durumu fark etmeksizin tüm proje gelirlerini topluyor
         if project['status'] == 'Paid':
             total_revenue += project['budget']
         elif project['status'] == 'Pending':
             pending_payments += project['budget']
     
     # Verileri şablona gönderiyoruz
-    return render_template('dashboard.html', projects=projects, total_revenue=total_revenue, pending_payments=pending_payments)
+    return render_template('dashboard.html', projects=projects, total_revenue=total_revenue, pending_payments=pending_payments, gross_revenue=gross_revenue)
 
 @app.route('/logout')
 def logout():

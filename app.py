@@ -1,28 +1,27 @@
-from flask import Flask, render_template,request,session,redirect,url_for
 import sqlite3
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key= 'freelance_secret_key' #session(oturum) yönetimi için gerekli
+app.secret_key = 'super_secret_key_for_freelance_os'
 
 def get_db_connection():
-    #ham sql kullanmak için veritabanına bağlanır.
-    conn=sqlite3.connect('freelance.db')
-    conn.row_factory= sqlite3.Row #verilere isimleri ile erişmeyi sağlar
+    conn = sqlite3.connect('freelance.db')
+    conn.row_factory = sqlite3.Row
     return conn
 
 def calculate_financials(projects):
     """
     Business Logic: Calculates gross revenue, total earnings, and outstanding receivables.
-    This independent function is designed to be fully testable via Unit Tests.
+    Designed to be fully compatible with both sqlite3.Row and unit test dicts.
     """
     total_revenue = 0
     pending_payments = 0
     gross_revenue = 0
     
     for project in projects:
-        # SQLite Row nesnesini veya normal sözlüğü (dict) desteklemesi için get yapısını kullanıyoruz
-        budget = project.get('budget', 0)
-        status = project.get('status', 'Pending')
+        budget = project['budget']
+        status = project['status']
         
         gross_revenue += budget
         if status == 'Paid':
@@ -32,42 +31,57 @@ def calculate_financials(projects):
             
     return gross_revenue, total_revenue, pending_payments
 
-@app.route('/register',methods=['GET', 'POST'])
+@app.route('/')
+def home():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method=="POST":
+    if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-
+        
         db = get_db_connection()
-        try:
-            db.execute("INSERT INTO users (username, password) VALUES (?,?)",(username,password))
-            db.commit()
+        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        
+        if user:
+            flash("Username already exists!")
             db.close()
-            return redirect(url_for('login'))
-        except sqlite3.IntegrityError:
-            db.close()
-            return "Username already exists!"
-
+            return redirect(url_for('register'))
+            
+        db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+        db.commit()
+        db.close()
+        return redirect(url_for('login'))
+        
     return render_template('register.html')
 
-@app.route('/login' , methods=['GET','POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-
+        
         db = get_db_connection()
         user = db.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
         db.close()
-
+        
         if user:
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect(url_for('dashboard'))
         else:
-            return "Invalid credentials!"
-
+            flash("Invalid credentials!")
+            return redirect(url_for('login'))
+            
     return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/dashboard')
 def dashboard():
@@ -76,77 +90,72 @@ def dashboard():
 
     user_id = session['user_id']
     search_query = request.args.get('search', '').strip()
+    category_filter = request.args.get('category_filter', '').strip()
+    
     db = get_db_connection()
+    query = "SELECT * FROM projects WHERE user_id = ?"
+    params = [user_id]
     
     if search_query:
+        query += " AND (client_name LIKE ? OR project_title LIKE ?)"
         formatted_search = f"%{search_query}%"
-        query = "SELECT * FROM projects WHERE user_id = ? AND (client_name LIKE ? OR project_title LIKE ?)"
-        projects = db.execute(query, (user_id, formatted_search, formatted_search)).fetchall()
-    else:
-        projects = db.execute("SELECT * FROM projects WHERE user_id = ?", (user_id,)).fetchall()
+        params.extend([formatted_search, formatted_search])
         
+    if category_filter:
+        query += " AND category = ?"
+        params.append(category_filter)
+        
+    projects = db.execute(query, tuple(params)).fetchall()
     db.close()
     
-    # İŞ MANTIĞI: Bağımsız fonksiyonumuzu çağırarak hesaplamayı yapıyoruz
+    # Financial calculation using business logic function
     gross_revenue, total_revenue, pending_payments = calculate_financials(projects)
     
-    return render_template('dashboard.html', projects=projects, total_revenue=total_revenue, pending_payments=pending_payments, gross_revenue=gross_revenue)
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
+    # [US6] Deadline and urgency analysis
+    analyzed_projects = []
+    current_date = datetime.now()
+    
+    for row in projects:
+        project_dict = dict(row)
+        try:
+            project_deadline = datetime.strptime(project_dict['deadline'], '%Y-%m-%d')
+            # Calculate remaining days (using .days treats it purely on date level)
+            days_remaining = (project_deadline.date() - current_date.date()).days
+            
+            if 0 <= days_remaining <= 3 and project_dict['status'] == 'Pending':
+                project_dict['is_urgent'] = True
+            else:
+                project_dict['is_urgent'] = False
+        except:
+            project_dict['is_urgent'] = False
+            
+        analyzed_projects.append(project_dict)
+        
+    return render_template('dashboard.html', projects=analyzed_projects, total_revenue=total_revenue, pending_payments=pending_payments, gross_revenue=gross_revenue)
 
 @app.route('/add_project', methods=['GET', 'POST'])
-def app_project():
+def add_project():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
+        
     if request.method == 'POST':
         client_name = request.form['client_name']
         project_title = request.form['project_title']
-        budget_raw = request.form['budget']
-        deadline = request.form.get('deadline')
-        user_id = session['user_id'] # Projeyi giriş yapan kişiye bağlıyoruz
-
-        # Kabul Kriteri Güvencesi: Eksik veri kontrolü
-        if not client_name or not project_title or not budget_raw or not deadline:
-            flash("Warning: All fields are mandatory!")
-            return redirect(url_for('add_project'))
-
-        try:
-            budget = float(budget_raw)
-            if budget <=0:
-                return "Error: Budget must be a positive numerical value!",400
+        budget = float(request.form['budget'])
+        deadline = request.form['deadline']
+        category = request.form['category']
+        user_id = session['user_id']
         
-        except ValueError:
-            return "Error: Budget must be a valid number!",400
-
         db = get_db_connection()
-        db.execute("INSERT INTO projects (user_id, client_name, project_title, budget, deadline) VALUES (?,?,?,?,?)", (user_id,client_name,project_title,budget, deadline))
+        db.execute(
+            "INSERT INTO projects (client_name, project_title, budget, deadline, category, status, user_id) VALUES (?, ?, ?, ?, ?, 'Pending', ?)",
+            (client_name, project_title, budget, deadline, category, user_id)
+        )
         db.commit()
         db.close()
-
         return redirect(url_for('dashboard'))
-
+        
     return render_template('add_project.html')
-
-@app.route('/delete_project/<int:project_id>')
-def delete_project(project_id):
-    #güvenlik kontrolü, eğer giriş yapılmadıysa login sayfasına yönlendirir.
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-
-    user_id = session['user_id']
-    db = get_db_connection()
-
-    # Güvenlik önlemi: Sadece giriş yapan kullanıcıya ait olan projeyi sil (SQL injection ve yetki aşımı koruması)
-    db.execute("DELETE FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id))
-    db.commit()
-    db.close()
-    
-    # Silme işleminden sonra güncel listeyi görmesi için dashboard'a geri yönlendiriyoruz
-    return redirect(url_for('dashboard'))
 
 @app.route('/edit_project/<int:project_id>', methods=['GET', 'POST'])
 def edit_project(project_id):
@@ -155,22 +164,20 @@ def edit_project(project_id):
 
     user_id = session['user_id']
     db = get_db_connection()
-
-    # Önce düzenlenmek istenen projeyi çekiyoruz (ve kullanıcının kendi projesi mi diye bakıyoruz)
     project = db.execute("SELECT * FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id)).fetchone()
 
     if not project:
         db.close()
-        return "Project not found or unauthorized!",404
+        return "Project not found or unauthorized!", 404
 
     if request.method == 'POST':
         client_name = request.form.get('client_name')
         project_title = request.form.get('project_title')
         budget_raw = request.form.get('budget')
         deadline = request.form.get('deadline')
+        category = request.form.get('category')
 
-        # İş Mantığı Kriteri: Eksik alan kontrolü
-        if not client_name or not project_title or not budget_raw or not deadline:
+        if not client_name or not project_title or not budget_raw or not deadline or not category:
             flash("Warning: All fields are mandatory!")
             return redirect(url_for('edit_project', project_id=project_id))
 
@@ -183,12 +190,11 @@ def edit_project(project_id):
             flash("Warning: Invalid budget format!")
             return redirect(url_for('edit_project', project_id=project_id))
 
-        # Ham SQL ile veritabanını güncelliyoruz (CRUD - Update)
         db.execute("""
             UPDATE projects 
-            SET client_name = ?, project_title = ?, budget = ?, deadline = ? 
+            SET client_name = ?, project_title = ?, budget = ?, deadline = ?, category = ? 
             WHERE id = ? AND user_id = ?
-        """, (client_name, project_title, budget, deadline, project_id, user_id))
+        """, (client_name, project_title, budget, deadline, category, project_id, user_id))
         
         db.commit()
         db.close()
@@ -197,32 +203,32 @@ def edit_project(project_id):
     db.close()
     return render_template('edit_project.html', project=project)
 
-
 @app.route('/toggle_status/<int:project_id>')
 def toggle_status(project_id):
     if 'user_id' not in session:
         return redirect(url_for('login'))
-
-    user_id = session['user_id']
+        
     db = get_db_connection()
-    
-    # Güvenlik Kontrolü: Projenin gerçekten bu kullanıcıya ait olduğundan emin oluyoruz
-    project = db.execute("SELECT status FROM projects WHERE id = ? AND user_id = ?", (project_id, user_id)).fetchone()
+    project = db.execute("SELECT * FROM projects WHERE id = ? AND user_id = ?", (project_id, session['user_id'])).fetchone()
     
     if project:
-        # Durum Pending ise Paid, Paid ise Pending yapıyoruz
         new_status = 'Paid' if project['status'] == 'Pending' else 'Pending'
-        
-        # Ham SQL ile durumu güncelliyoruz
-        db.execute("UPDATE projects SET status = ? WHERE id = ? AND user_id = ?", (new_status, project_id, user_id))
-        
-        # Değişiklikleri veritabanına mühürlüyoruz
+        db.execute("UPDATE projects SET status = ? WHERE id = ?", (new_status, project_id))
         db.commit()
         
     db.close()
-    
-    # Güncel durumu görmesi için dashboard'a geri yönlendiriyoruz
     return redirect(url_for('dashboard'))
 
-if __name__=="__main__":
+@app.route('/delete_project/<int:project_id>')
+def delete_project(project_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    db = get_db_connection()
+    db.execute("DELETE FROM projects WHERE id = ? AND user_id = ?", (project_id, session['user_id']))
+    db.commit()
+    db.close()
+    return redirect(url_for('dashboard'))
+
+if __name__ == '__main__':
     app.run(debug=True)

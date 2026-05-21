@@ -21,13 +21,26 @@
             
             <form method="POST">
                 <div style="margin-bottom: 15px;">
+                    <label style="color: var(--text-muted); display: block; margin-bottom: 5px;">Category:</label>
+                    <select name="category" style="width: 100%; padding: 10px; background: #121214; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                        <option value="Software & Tech">Software & Tech</option>
+                        <option value="Engineering & CAD">Engineering & CAD (AutoCAD, Electronics etc.)</option>
+                        <option value="Design & Creative">Design & Creative (UI/UX, Logo, Video Editing)</option>
+                        <option value="Writing & Translation">Writing & Translation (Articles, Content Creation)</option>
+                        <option value="Marketing & Social Media">Marketing & Social Media Management</option>
+                        <option value="Consulting & Tuition">Consulting & Academic Tuition</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
                     <label style="color: var(--text-muted); display: block; margin-bottom: 5px;">Client Name:</label>
                     <input type="text" name="client_name" placeholder="e.g. Acme Corp" required>
                 </div>
                 
                 <div style="margin-bottom: 15px;">
                     <label style="color: var(--text-muted); display: block; margin-bottom: 5px;">Project Title:</label>
-                    <input type="text" name="project_title" placeholder="e.g. Mobile App Development" required>
+                    <input type="text" name="project_title" placeholder="e.g. AutoCAD Drawing or Website" required>
                 </div>
                 
                 <div style="margin-bottom: 15px;">

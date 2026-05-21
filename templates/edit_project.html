@@ -21,6 +21,19 @@
             
             <form method="POST">
                 <div style="margin-bottom: 15px;">
+                    <label style="color: var(--text-muted); display: block; margin-bottom: 5px;">Category:</label>
+                    <select name="category" style="width: 100%; padding: 10px; background: #121214; border: 1px solid var(--border); border-radius: 4px; color: #fff;">
+                        <option value="Software & Tech" {% if project['category'] == 'Software & Tech' %}selected{% endif %}>Software & Tech</option>
+                        <option value="Engineering & CAD" {% if project['category'] == 'Engineering & CAD' %}selected{% endif %}>Engineering & CAD</option>
+                        <option value="Design & Creative" {% if project['category'] == 'Design & Creative' %}selected{% endif %}>Design & Creative</option>
+                        <option value="Writing & Translation" {% if project['category'] == 'Writing & Translation' %}selected{% endif %}>Writing & Translation</option>
+                        <option value="Marketing & Social Media" {% if project['category'] == 'Marketing & Social Media' %}selected{% endif %}>Marketing & Social Media</option>
+                        <option value="Consulting & Tuition" {% if project['category'] == 'Consulting & Tuition' %}selected{% endif %}>Consulting & Tuition</option>
+                        <option value="Other" {% if project['category'] == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 15px;">
                     <label style="color: var(--text-muted); display: block; margin-bottom: 5px;">Client Name:</label>
                     <input type="text" name="client_name" value="{{ project['client_name'] }}" required>
                 </div>

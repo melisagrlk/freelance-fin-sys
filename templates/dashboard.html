@@ -47,6 +47,7 @@
         <table>
             <thead>
                 <tr>
+                    <th>Category</th>
                     <th>Client Name</th>
                     <th>Project Title</th>
                     <th>Budget</th>
@@ -58,10 +59,21 @@
             <tbody>
                 {% for project in projects %}
                 <tr>
+                    <td>
+                        <span style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 4px; font-size: 13px; border: 1px solid var(--border); color: var(--text-muted);">
+                            {{ project['category'] }}
+                        </span>
+                    </td>
+                    
                     <td>{{ project['client_name'] }}</td>
                     <td>{{ project['project_title'] }}</td>
                     <td>${{ project['budget'] }}</td>
-                    <td>{{ project['deadline'] }}</td>
+                    <td>
+                        {{ project['deadline'] }}
+                        {% if project['is_urgent'] %}
+                            <span style="color: var(--danger); font-size: 11px; font-weight: bold; margin-left: 5px; background: rgba(247,90,104,0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid rgba(247,90,104,0.2);">⚠️ URGENT</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if project['status'] == 'Paid' %}
                             <span style="color: var(--primary); font-weight: bold;">{{ project['status'] }}</span>

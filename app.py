@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from datetime import datetime
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = 'super_secret_key_for_freelance_os'
@@ -43,6 +44,15 @@ def register():
         username = request.form['username']
         password = request.form['password']
         
+        # 🔐 MÜHENDİSLİK MANTIĞI: Küçük harf (islower) kontrolünü de zincire ekledik
+        if (len(password) < 8 or 
+            not any(char.isupper() for char in password) or 
+            not any(char.islower() for char in password) or 
+            not any(char.isdigit() for char in password)):
+            
+            flash("Warning: Password does not meet the secure requirements listed below!")
+            return redirect(url_for('register'))
+        
         db = get_db_connection()
         user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         
@@ -51,12 +61,16 @@ def register():
             db.close()
             return redirect(url_for('register'))
             
-        db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+        # Güvenli hash'leme
+        hashed_password = generate_password_hash(password)
+        
+        db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
         db.commit()
         db.close()
         return redirect(url_for('login'))
         
     return render_template('register.html')
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -65,10 +79,11 @@ def login():
         password = request.form['password']
         
         db = get_db_connection()
-        user = db.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password)).fetchone()
+        user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         db.close()
         
-        if user:
+        # 🔐 MÜHENDİSLİK KRİTERİ: Gelen düz şifreyi, db'deki hash'li şifreyle güvenli şekilde kıyaslıyoruz
+        if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session['username'] = user['username']
             return redirect(url_for('dashboard'))

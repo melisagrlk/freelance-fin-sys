@@ -44,7 +44,6 @@ def register():
         username = request.form['username']
         password = request.form['password']
         
-        # 🔐 MÜHENDİSLİK MANTIĞI: Küçük harf (islower) kontrolünü de zincire ekledik
         if (len(password) < 8 or 
             not any(char.isupper() for char in password) or 
             not any(char.islower() for char in password) or 
@@ -61,7 +60,6 @@ def register():
             db.close()
             return redirect(url_for('register'))
             
-        # Güvenli hash'leme
         hashed_password = generate_password_hash(password)
         
         db.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, hashed_password))
@@ -82,7 +80,6 @@ def login():
         user = db.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         db.close()
         
-        # 🔐 MÜHENDİSLİK KRİTERİ: Gelen düz şifreyi, db'deki hash'li şifreyle güvenli şekilde kıyaslıyoruz
         if user and check_password_hash(user['password'], password):
             session['user_id'] = user['id']
             session['username'] = user['username']
@@ -126,7 +123,6 @@ def dashboard():
     # Financial calculation using business logic function
     gross_revenue, total_revenue, pending_payments = calculate_financials(projects)
     
-    # [US6] Deadline and urgency analysis
     analyzed_projects = []
     current_date = datetime.now()
     
@@ -134,7 +130,6 @@ def dashboard():
         project_dict = dict(row)
         try:
             project_deadline = datetime.strptime(project_dict['deadline'], '%Y-%m-%d')
-            # Calculate remaining days (using .days treats it purely on date level)
             days_remaining = (project_deadline.date() - current_date.date()).days
             
             if 0 <= days_remaining <= 3 and project_dict['status'] == 'Pending':
